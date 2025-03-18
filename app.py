@@ -1,7 +1,8 @@
 from flask import Flask, render_template, jsonify, request
 from src.helper import download_hugging_face_embeddings
 from langchain_pinecone import PineconeVectorStore
-from langchain_openai import OpenAI
+from groq import Groq
+from langchain_groq import ChatGroq  # Use LangChain wrapper for Groq
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
@@ -14,10 +15,10 @@ app = Flask(__name__)
 load_dotenv()
 
 PINECONE_API_KEY=os.environ.get('PINECONE_API_KEY')
-OPENAI_API_KEY=os.environ.get('OPENAI_API_KEY')
+GROQ_API_KEY=os.environ.get('GROQ_API_KEY')
 
 os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
 embeddings = download_hugging_face_embeddings()
 
@@ -33,7 +34,28 @@ docsearch = PineconeVectorStore.from_existing_index(
 retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":3})
 
 
-llm = OpenAI(temperature=0.4, max_tokens=500)
+# Initialize LangChain's Groq LLM
+llm = ChatGroq(
+    groq_api_key=GROQ_API_KEY,
+    model_name="deepseek-r1-distill-qwen-32b",
+    temperature=0.6,
+    max_tokens=4096,
+)
+
+# Define the system prompt
+system_prompt = (
+    "You are an assistant for question-answering tasks. "
+    "Use the following pieces of retrieved context to answer "
+    "the question. If you don't know the answer, say that you "
+    "If the question is not related to health, say 'I don't know'. "
+    "If you don't know the answer from the context, also say 'I don't know'. "
+    
+    "don't know. Use three sentences maximum and keep the "
+    "answer concise."
+    "\n\n"
+    "{context}"
+)
+
 prompt = ChatPromptTemplate.from_messages(
     [
         ("system", system_prompt),
